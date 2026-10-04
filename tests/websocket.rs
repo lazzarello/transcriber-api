@@ -26,8 +26,10 @@ async fn stop_has_one_complete() {
     ws.send(Message::Binary(vec![0, 0].into())).await.unwrap(); ws.send(Message::Text(r#"{"type":"stop"}"#.into())).await.unwrap();
     let mut complete = Vec::new();
     timeout(Duration::from_secs(1), async {
-        while let Some(Ok(Message::Text(s))) = ws.next().await {
-            if let ServerMessage::Complete { text } = serde_json::from_str(&s).unwrap() { complete.push(text); }
+        while let Some(message) = ws.next().await {
+            if let Message::Text(s) = message.unwrap() {
+                if let ServerMessage::Complete { text } = serde_json::from_str(&s).unwrap() { complete.push(text); }
+            }
         }
     }).await.unwrap();
     assert_eq!(complete, ["hello world"]);

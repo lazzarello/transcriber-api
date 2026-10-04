@@ -44,11 +44,10 @@ pub async fn connection(stream: TcpStream, sessions: std::sync::Arc<Semaphore>) 
     tokio::spawn(Fake { audio: audio_rx, events: event_tx, cancel: cancel_rx }.run());
     let mut decoder = Decoder::new();
     let mut audio_tx = Some(audio_tx);
-    let mut cancelled = false;
     let mut snapshot = Snapshot::default();
     loop {
         tokio::select! {
-            message = input.next(), if !cancelled => {
+            message = input.next() => {
                 let Some(message) = message else { let _ = cancel_tx.take().map(|tx| tx.send(())); break };
                 match message? {
                     Message::Binary(bytes) => {
@@ -58,7 +57,7 @@ pub async fn connection(stream: TcpStream, sessions: std::sync::Arc<Semaphore>) 
                     }
                     Message::Text(text) => match serde_json::from_str::<ClientMessage>(&text) {
                         Ok(ClientMessage::Stop) => { if decoder.finish().is_err() { send_error(&mut sink, "bad_request", "odd trailing PCM byte").await?; let _ = cancel_tx.take().map(|tx| tx.send(())); break } audio_tx = None; }
-                        Ok(ClientMessage::Cancel) => { let _ = cancel_tx.take().map(|tx| tx.send(())); audio_tx = None; break; }
+                        Ok(ClientMessage::Cancel) => { let _ = cancel_tx.take().map(|tx| tx.send(())); break; }
                         Ok(ClientMessage::Ping) => { sink.send(Message::Text(serde_json::to_string(&ServerMessage::Pong)?.into())).await?; }
                         _ => { send_error(&mut sink, "bad_request", "unexpected message").await?; }
                     },
@@ -71,13 +70,14 @@ pub async fn connection(stream: TcpStream, sessions: std::sync::Arc<Semaphore>) 
                     Some(Event::Partial(t)) => { snapshot.append(&t); snapshot.changed(); send_snapshot(&mut sink, false, &snapshot).await?; }
                     Some(Event::Final(t)) => { snapshot.final_delta(&t); snapshot.changed(); send_snapshot(&mut sink, true, &snapshot).await?; }
                     Some(Event::Replace { backspace, text }) => { snapshot.replace(backspace, &text); snapshot.changed(); send_snapshot(&mut sink, false, &snapshot).await?; }
-                    Some(Event::Ended) => { if !cancelled { sink.send(Message::Text(serde_json::to_string(&ServerMessage::Complete { text: snapshot.text() })?.into())).await?; } break }
-                    Some(Event::Error(e)) => { if !cancelled { send_error(&mut sink, "transcription_failed", &e).await?; } break }
+                    Some(Event::Ended) => { sink.send(Message::Text(serde_json::to_string(&ServerMessage::Complete { text: snapshot.text() })?.into())).await?; break }
+                    Some(Event::Error(e)) => { send_error(&mut sink, "transcription_failed", &e).await?; break }
                     None => break,
                 }
             }
         }
     }
+    sink.close().await?;
     drop(permit);
     Ok(())
 }

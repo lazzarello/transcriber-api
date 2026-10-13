@@ -13,3 +13,10 @@ devenv.local.yaml
 
 target/
 completed-phases/
+
+# Android/Gradle
+android/.gradle/
+android/local.properties
+android/build/
+android/app/build/
+android/.idea/

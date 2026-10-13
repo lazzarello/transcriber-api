@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">PTT Client</string>
+    <string name="tongue_description">Tongue</string>
+    <string name="water_drops_description">Water drops</string>
+</resources>

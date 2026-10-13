@@ -5,7 +5,8 @@
   env.GREET = "devenv";
 
   # https://devenv.sh/packages/
-  packages = [ pkgs.git ];
+  # Keep editing in NeoVim; Android Studio can be used separately as the SDK manager.
+  packages = [ pkgs.git pkgs.android-tools pkgs.github-cli ];
 
   # https://devenv.sh/languages/
   languages.rust.enable = true;
